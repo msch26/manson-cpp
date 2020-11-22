@@ -7,7 +7,10 @@ It was tested with a HCS 3302 device. The library implements all UART commands, 
 
 To keep up with the latest announcements for this project, or to ask questions:
 
-**Twitter** [@_marbo_](https://twitter.com/_marbo_)
+Questions, comments and bug reports can be send to:
+
+ * Marco Scholtyssek <code@scholtyssek.org>
+ * **Twitter** [@_marbo_](https://twitter.com/_marbo_)
 
 ## Licence
 
