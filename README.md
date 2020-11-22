@@ -93,9 +93,9 @@ int main(int argc, char **argv) {
 	// set values stored in memory on location 0, 1 or 2
 	runMemory(HCS::M0);
 	std::this_thread::sleep_for(std::chrono::seconds(5));
-	runMemory(HCS::M0);
+	runMemory(HCS::M1);
 	std::this_thread::sleep_for(std::chrono::seconds(5));
-	runMemory(HCS::M0);
+	runMemory(HCS::M1);
     
     h.disconnect();
 	return 0;
