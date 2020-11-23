@@ -45,12 +45,12 @@ int main(int argc, char **argv) {
 
     HCS h("/dev/ttyUSB0", static_cast<unsigned int>(9600));
     h.connect();
-    std::cout << "max voltage: " << getMaxVoltage() << "V\n";
-    std::cout << "max current: " << getMaxCurrent() << "A\n";
+    std::cout << "max voltage: " << h.getMaxVoltage() << "V\n";
+    std::cout << "max current: " << h.getMaxCurrent() << "A\n";
     std::cout.flush();
 
-    setVoltage(3.0f);
-    setCurrent(0.1f);
+    h.setVoltage(3.0f);
+    h.setCurrent(0.1f);
 		
     h.disconnect();
 	return 0;
