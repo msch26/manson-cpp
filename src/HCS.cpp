@@ -8,6 +8,8 @@
 
 #include "HCS.h"
 #include "wiringSerial.h"
+
+#include <sys/ioctl.h>
 #include <iostream>
 #include <exception>
 
@@ -19,6 +21,12 @@
 #include <chrono>
 #include <thread>
 
+#include <cstdint>
+
+#include <cstring>
+#include <cerrno>
+
+#include "Serial.h"
 
 #ifdef TEST
 #include <vector>
@@ -97,19 +105,35 @@ void HCS::connect(){
 	this->uart = "/tmp/virtual-tty";
 #endif
 
-	if((fd = (serialOpen(uart.data(), baud))) < 0){
-		throw std::runtime_error("failed to open serial device");
-	}
+	fd = (Serial::connect(uart.data(), baud));
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(20));
-	std::cout << "connecting to device <" << this->uart << "> \nbaud <" << this->baud << ">\n";
-	flush();	// clear pending uart buffer
+
+#ifdef DEBUG
+		std::cout << "serial buffer contains " << getNumberBytesInSendBuffer() << " after connect\n";
+#endif
+
 	setConnected();
+	std::cout << "connecting to device <" << this->uart << "> \nbaud <" << this->baud << ">\n";
+}
+
+int HCS::getNumberBytesInSendBuffer()
+{
+  int result ;
+
+  if (ioctl (fd, FIONREAD, &result) == -1)
+    return -1 ;
+
+  return result ;
 }
 
 void HCS::disconnect(){
 	if(connected){
-		serialClose(fd);
+#ifdef DEBUG
+		std::cout << "serial buffer contains " << getNumberBytesInSendBuffer() << " before disconnect\n";
+#endif
+		flush();
+		Serial::disconnect(fd);
+		std::cout << "device disconnected()\n";
 		setDisconnected();
 	}
 }
@@ -124,36 +148,54 @@ std::string HCS::receiveViaUart(uint8_t byteCount) {
 	int i=0;
 	std::string received = "";
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(30));
+#ifdef DEBUG
+		std::cout << "exprected response length (" << std::to_string(byteCount) << ")\n";
+#endif
 
-	while(serialDataAvail(fd) == -1)
+
+	auto start = std::chrono::high_resolution_clock::now();
+	int receivedBytes = 0x00;
+	auto timeout = 2000;
+	// wait for data available in usart buffer
+	while((!receivedBytes) && (ioctl(fd, FIONREAD, &receivedBytes ) >= 0))
 	{
-		std::cout << "waiting for data\n";
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+		auto end = std::chrono::high_resolution_clock::now();
+		auto diff = end - start;
+		int ms = std::chrono::duration_cast<std::chrono::milliseconds>(diff).count();
+		if(ms >= timeout)
+		{
+			return "";
+		}
 	}
 
-	while ((c = serialGetchar(fd)) != -1 && byteCounter < byteCount) {
-		if (c < 0x20)  { // || c > 0x7E) {
-			continue;
-		}
+	while ((c = Serial::getChar(fd)) != -1 && byteCounter < byteCount) {
+//		if (c < 0x20)  { // || c > 0x7E) {
+//			continue;
+//		}
+//		y = 4;
 		debug[i] = c;
 		++i;
 		++byteCounter;
 
-
 #ifdef DEBUG
-//		std::cout << "received byte [" << std::to_string(byteCounter) << "] <"
-//				<< c << ">\n";
-		std::cout << c;
-		std::cout.flush();
+		std::cout << "received byte [" << std::to_string(byteCounter) << "] <"
+				<< c << ">\n";
+//		std::cout << c;
 #endif
-//		std::printf("%d :<%c>\n", byteCount, c);
 		received += c;
 	}
 
+//	if(y < 3){
+//		std::cerr << "try to wait for data again\n";
+//	}
+
+//	}	// for()
+
 #ifdef DEBUG
-		std::cout << std::endl;
+		std::cout << "response count is " << std::to_string(byteCount) << " byte\n";
 #endif
-//	std::printf("%d : %d\n", byteCounter, byteCount);
 
 	if(byteCounter != byteCount){
 		std::cerr << "WARN: received " << std::to_string(byteCounter) << " bytes, but exprected " << std::to_string(byteCount) << std::endl;
@@ -179,37 +221,64 @@ std::string HCS::sendCommand(const std::string& cmd, const uint8_t receiveBytesC
 	isConnected();
 	std::string response = "";
 
-	send(cmd);
+	constexpr unsigned int sendTryCounterMax = 0x05;
+	unsigned int sendTryCounter = 0x00;
+	bool resend = true;
 
-	if(receiveBytesCount > 0)
+	while((resend) && ++sendTryCounter <= sendTryCounterMax)
 	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(150));
-		response = receiveViaUart(receiveBytesCount);
-	}
+		resend = false;
+		// if there is no response, we try to send the command again
+		if(sendTryCounter > 1){
+			std::cout << "resending Command <" << cmd << ">\n";
+		}
 
-//	try{
-		if(expectOk)
+		if(send(cmd) == 0)
 		{
-			// wait to receive "OK" from device
-			std::this_thread::sleep_for(std::chrono::milliseconds(50));
-			if(!HCS::receiveOk()){
-				throw ExprectedReceiveError(cmd + " was not acknowledged by HCS. OK is missing");
+			throw std::runtime_error("no bytes were send for command: <" + cmd + ">");
+		}
+
+		if(receiveBytesCount > 0)
+		{
+			response = receiveViaUart(receiveBytesCount);
+			if(response.empty()){
+				std::this_thread::sleep_for(std::chrono::milliseconds(200));
+				// missing response, we need to resend cmd
+				// but before clear the current usart buffer
+				flush();
+				resend = true;
+				std::cout << "WARN: response is empty. Resending command <" << cmd << ">\n";
+				continue; // try again to send this command
 			}
 		}
-//	}catch (ExprectedReceiveError& e) {
-//		std::cerr << "Exprected receive data missing: " << e.what() << '\n';
-//		flush(); // flush triggers receive buffer to be cleared
-//	}
 
+		if(expectOk && !resend)
+		{
+			// wait to receive "OK" from device
+			if(!HCS::receiveOk()){
+				std::this_thread::sleep_for(std::chrono::milliseconds(200));
+				std::cout << "WARN: Acknowledged (OK) is missing. Resending command <" << cmd << ">\n";
+				flush();
+				resend = true;
+				continue; // try again to send this command
+			}
+		}
+	}
+
+	if(sendTryCounter > sendTryCounterMax)
+	{
+		throw std::runtime_error("response from Manson device is missing. Send cmd <" + cmd + ">\n");
+	}
 	return response;
 }
 
-void HCS::send(const std::string& msg)
+int HCS::send(const std::string& msg)
 {
-	std::this_thread::sleep_for(std::chrono::milliseconds(20));
-	serialPuts(fd, msg.c_str());
-	serialPuts(fd, "\r\n");
+	unsigned int sendCnt = 0x00;
+	sendCnt = Serial::puts(fd, msg.c_str());
+	Serial::puts(fd, "\r\n");
 	flush();
+	return sendCnt;
 }
 
 /**
@@ -218,7 +287,7 @@ void HCS::send(const std::string& msg)
  */
 void HCS::flush(void)
 {
-	serialFlush(fd);
+	Serial::flush(&fd);
 }
 
 void HCS::uartDebug(const std::string& data)
@@ -300,22 +369,22 @@ std::string HCS::readStatus() {
 	return "CV activated";
 }
 
-std::string HCS::getPresentVoltageAndCurrent(void) {
+std::string HCS::getPresentVoltageAndCurrent(bool printOutput) {
 	std::string voltCurr = sendCommand(UART_COMMAND_GETS, 6, true);
 
 	verifyReceived(voltCurr, "no present voltage and current received via uart");
 	MansonData d = toMansonData(voltCurr);
 
-	std::cout << "received present voltage: <" << std::fixed  << std::setprecision( 2 )  << d.first << "> " << "current: <" << d.second << ">\n";
+	if(printOutput){
+		std::cout << "received present voltage: <" << std::fixed  << std::setprecision( 2 )  << d.first << "> " << "current: <" << d.second << ">\n";
+	}
 
 	return voltCurr;
 }
 
 float HCS::getPresentUpperLimitVoltage(void){
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(20));
 	std::string presentUpperLimit = sendCommand(UART_COMMAND_GOVP, 3, true);
-	std::this_thread::sleep_for(std::chrono::milliseconds(20));
 	verifyReceived(presentUpperLimit, "no present upper voltage limit received via uart");
 
 	upperLimits = toMansonData(presentUpperLimit);
@@ -350,9 +419,7 @@ void HCS::setUpperVoltageLimit(const float voltage)
 }
 
 float HCS::getPresentUpperLimitCurrent(void){
-	std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	std::string presentUpperLimit = sendCommand(UART_COMMAND_GOCP, 3, true);
-	std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	verifyReceived(presentUpperLimit, "no present upper current limit received via uart");
 
 	MansonData d = toMansonData(presentUpperLimit);
@@ -539,7 +606,6 @@ float HCS::getMaxVoltage(void) {
 void HCS::test(){
 		std::cout << "max voltage: " << getMaxVoltage() << "V\n";
 		std::cout << "max current: " << getMaxCurrent() << "A\n";
-		std::cout.flush();
 
 		setVoltage(3.0f);
 		setCurrent(0.1f);
@@ -552,7 +618,6 @@ void HCS::test(){
 //			std::cout << std::endl;
 //			std::cout << '\t';
 //			setVoltage(f);
-//			std::this_thread::sleep_for(std::chrono::milliseconds(150));
 //			std::cout << '\t';
 //			getPresentVoltageAndCurrent();
 //
@@ -569,11 +634,9 @@ void HCS::test(){
 	//		std::cout << std::endl;
 	//		std::cout << '\t';
 	//		setCurrent(f);
-	//		std::this_thread::sleep_for(std::chrono::milliseconds(150));
 	//		std::cout << '\t';
 	//		getPresentVoltageAndCurrent();
 	//
-	//		std::this_thread::sleep_for(std::chrono::milliseconds(300));
 	//		std::cout << '\t';
 	//		std::cout << "status is: " << readStatus() << '\n';
 	//

@@ -6,7 +6,7 @@ HEADER := HCS.h
 RM := rm
 MKDIR := mkdir
 
-LDFLAGS := -lwiringPi -lcrypt -lpthread -lrt
+LDFLAGS := 
 CXXFLAGS = -std=c++17 -I.
 
 #OBJS += $(.cpp=.o)

@@ -65,8 +65,12 @@ private:
 
 	bool isConnected(void);
 	std::string receiveViaUart(uint8_t byteCount);
-	void send(const std::string& msg);
+	int send(const std::string& msg);
 	std::string sendCommand(const std::string& msg, const uint8_t receiveBytesCount = 0x0, const bool expectOk = true);
+
+	// ioctl functions
+	int getNumberBytesInSendBuffer();
+
 
 	MansonData getMaxValues();
 	MansonData toMansonData(std::string& voltageCurrentString);
@@ -76,6 +80,7 @@ public:
 
 	explicit HCS(std::string _uart, unsigned int _baud) : baud(_baud), uart(_uart), connected(false)
 	{
+		initialized = false;
 	}
 	virtual ~HCS() = default;
 	void init();
@@ -94,7 +99,7 @@ public:
 	float getMaxVoltage(void);
 	float getPresentUpperLimitVoltage(void);
 	float getPresentUpperLimitCurrent(void);
-	std::string getPresentVoltageAndCurrent(void);
+	std::string getPresentVoltageAndCurrent(bool printOutput = true);
 
 	void readMemoryValues();
 	void runMemory(MEMORY m);

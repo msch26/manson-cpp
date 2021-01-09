@@ -1,7 +1,7 @@
 # Manson HCS-3XXX C++ library
 
 This repository contains a C++ library to control [Manson HCS](https://www.manson.com.hk/product/hcs-3202/) USB programmable power supplys.
-It was tested with a HCS 3302 device. The library implements all UART commands, that are availablle for that device.
+It was tested with a HCS 3302 device. The library implements all UART commands, that are available for that device.
 
 ## Contact
 
@@ -20,7 +20,6 @@ It would be nice to give a feedback if you are using this library.
 ## Quick start
 
 - Clone the repo: `git clone https://github.com/msch26/manson-cpp`
-- Install [WiringPi](https://github.com/WiringPi/WiringPi)
 - Build with make
 
 ## Simulation mode:
@@ -41,9 +40,11 @@ $ socat PTY,link=/tmp/virtual-tty,raw,echo=0 -
 #include <iostream>
 #include "HCS.h"
 
+const std::string SERIAL_DEVICE = "/dev/ttyUSB0";
+
 int main(int argc, char **argv) {
 
-    HCS h("/dev/ttyUSB0", static_cast<unsigned int>(9600));
+    HCS h(SERIAL_DEVICE, static_cast<unsigned int>(9600));
     h.connect();
     std::cout << "max voltage: " << h.getMaxVoltage() << "V\n";
     std::cout << "max current: " << h.getMaxCurrent() << "A\n";
@@ -62,8 +63,10 @@ int main(int argc, char **argv) {
 ```C++
 #include "HCS.h"
 
+const std::string SERIAL_DEVICE = "/dev/ttyUSB0";
+
 int main(int argc, char **argv) {
-    HCS h("/dev/ttyUSB0", static_cast<unsigned int>(9600));
+    HCS h(SERIAL_DEVICE, static_cast<unsigned int>(9600));
     h.connect();
     
 	// sets the upper voltage limit
@@ -85,8 +88,10 @@ int main(int argc, char **argv) {
 #include <thread>
 #include "HCS.h"
 
+const std::string SERIAL_DEVICE = "/dev/ttyUSB0";
+
 int main(int argc, char **argv) {
-    HCS h("/dev/ttyUSB0", static_cast<unsigned int>(9600));
+    HCS h(SERIAL_DEVICE, static_cast<unsigned int>(9600));
     h.connect();
     
 	// store memory values
