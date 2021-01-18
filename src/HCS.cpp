@@ -7,7 +7,6 @@
  */
 
 #include "HCS.h"
-#include "wiringSerial.h"
 
 #include <sys/ioctl.h>
 #include <iostream>
