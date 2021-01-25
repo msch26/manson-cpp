@@ -11,15 +11,20 @@
 
 const std::string SERIAL_DEVICE = "/dev/ttyUSB0";
 constexpr unsigned int delay_ms = 1500;
+constexpr unsigned int BAUDRATE = 9600;
 
 #include <thread>
 int main(int argc, char **argv) {
 
 
 	std::cout << "starting Manson HCS test\n\n";
-	HCS h(SERIAL_DEVICE, static_cast<unsigned int>(9600));
+	HCS h(SERIAL_DEVICE, static_cast<unsigned int>(BAUDRATE));
 	h.connect();
-//	h.test();
+
+#ifdef __MANSON_TEST
+	// run tests
+	h.test();
+#endif
 
 
 	h.setVoltage(15.2f);
