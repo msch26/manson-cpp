@@ -27,7 +27,7 @@
 
 #include "Serial.h"
 
-#ifdef TEST
+#ifdef __MANSON_TEST
 #include <vector>
 #include <algorithm>
 #endif
@@ -62,13 +62,17 @@ public:
 };
 
 void HCS::init() {
-	if(!connected){
-		throw std::runtime_error("failed to read max values. HSC is not connected via uart");
+	try{
+		if(!connected){
+			throw std::runtime_error("failed to read max values. HSC is not connected via uart");
+		}
+		maxValues = this->getMaxValues();
+		getPresentUpperLimitVoltage();
+		getPresentUpperLimitCurrent();
+		initialized = true;
+	}catch (std::runtime_error& e) {
+		std::cerr << e.what() << '\n';
 	}
-	maxValues = this->getMaxValues();
-	getPresentUpperLimitVoltage();
-	getPresentUpperLimitCurrent();
-	initialized = true;
 }
 
 void HCS::setDisconnected()
@@ -77,13 +81,19 @@ void HCS::setDisconnected()
 }
 
 bool HCS::isConnected(void) {
-#ifndef SIMULATION
-	if(!connected)
-	{
-		throw std::runtime_error("not connected to HSC");
-	}
-	if (fd < 0) {
-		throw std::runtime_error("serial stream is not open\n");
+#ifndef __MANSON_SIMULATION
+	try{
+		if(!connected)
+		{
+			if(fd < 0){
+				throw std::runtime_error("device connected state is not synced to file diskriptor");
+			}
+		}
+		if (fd < 0) {
+			throw std::runtime_error("file descriptor is not set");
+		}
+	}catch (std::runtime_error& e) {
+		std::cerr << e.what() << '\n';
 	}
 #endif
 	return true;
@@ -97,17 +107,17 @@ void HCS::setConnected()
 
 void HCS::connect(){
 
-#ifdef SIMULATION
-	throw std::runtime_error("SIMULATION mode is not implemented completely. Do not use -DSIMULATION in this version.");
+#ifdef __MANSON_SIMULATION
+	throw std::runtime_error("SIMULATION mode is not implemented completely. Do not use -D__MANSON_SIMULATION in this version.");
 	std::cerr << "To use the simulation mode, create a socat stream:\n\tsocat PTY,link=/tmp/virtual-tty,raw,echo=0 -\n";
-	std::cout << "-DSIMULATION is set\nusing /tmp/virtual-tty as device, not usb.\n\n";
+	std::cout << "-D__MANSON_SIMULATION is set\nusing /tmp/virtual-tty as device, not usb.\n\n";
 	this->uart = "/tmp/virtual-tty";
 #endif
 
 	fd = (Serial::connect(uart.data(), baud));
 
 
-#ifdef DEBUG
+#ifdef __MANSON_DEBUG
 		std::cout << "serial buffer contains " << getNumberBytesInSendBuffer() << " after connect\n";
 #endif
 
@@ -127,7 +137,7 @@ int HCS::getNumberBytesInSendBuffer()
 
 void HCS::disconnect(){
 	if(connected){
-#ifdef DEBUG
+#ifdef __MANSON_DEBUG
 		std::cout << "serial buffer contains " << getNumberBytesInSendBuffer() << " before disconnect\n";
 #endif
 		flush();
@@ -143,12 +153,11 @@ std::string HCS::receiveViaUart(uint8_t byteCount) {
 
 	uint8_t byteCounter = 0x0;
 	char c;
-	char debug[byteCount];
 	int i=0;
 	std::string received = "";
 
-#ifdef DEBUG
-		std::cout << "exprected response length (" << std::to_string(byteCount) << ")\n";
+#ifdef __MANSON_DEBUG
+	std::cout << "exprected response length (" << std::to_string(byteCount) << ")\n";
 #endif
 
 
@@ -174,11 +183,10 @@ std::string HCS::receiveViaUart(uint8_t byteCount) {
 //			continue;
 //		}
 //		y = 4;
-		debug[i] = c;
 		++i;
 		++byteCounter;
 
-#ifdef DEBUG
+#ifdef __MANSON_DEBUG
 		std::cout << "received byte [" << std::to_string(byteCounter) << "] <"
 				<< c << ">\n";
 //		std::cout << c;
@@ -186,13 +194,7 @@ std::string HCS::receiveViaUart(uint8_t byteCount) {
 		received += c;
 	}
 
-//	if(y < 3){
-//		std::cerr << "try to wait for data again\n";
-//	}
-
-//	}	// for()
-
-#ifdef DEBUG
+#ifdef __MANSON_DEBUG
 		std::cout << "response count is " << std::to_string(byteCount) << " byte\n";
 #endif
 
@@ -388,7 +390,7 @@ float HCS::getPresentUpperLimitVoltage(void){
 
 	upperLimits = toMansonData(presentUpperLimit);
 
-#ifdef DEBUG
+#ifdef __MANSON_DEBUG
 	std::cout << "received upper limit voltage: <" << upperLimits.first << ">\n";
 #endif
 	return upperLimits.second;
@@ -423,7 +425,7 @@ float HCS::getPresentUpperLimitCurrent(void){
 
 	MansonData d = toMansonData(presentUpperLimit);
 	upperLimits.second = d.first;
-#ifdef DEBUG
+#ifdef __MANSON_DEBUG
 	std::cout << "received upper limit current: <" << upperLimits.second << ">\n";
 #endif
 
@@ -601,7 +603,7 @@ float HCS::getMaxVoltage(void) {
 	return maxValues.first;
 }
 
-#ifdef TEST
+#ifdef __MANSON_TEST
 void HCS::test(){
 		std::cout << "max voltage: " << getMaxVoltage() << "V\n";
 		std::cout << "max current: " << getMaxCurrent() << "A\n";
@@ -663,6 +665,6 @@ void HCS::test(){
 }
 #else
 	void HCS::test(){
-		throw std::runtime_error("compile with -DTEST to run tests");
+		throw std::runtime_error("compile with -D__MANSON_TEST to run tests");
 	}
-#endif // #ifdef TEST_DEVICE
+#endif // #ifdef __MANSON_TEST

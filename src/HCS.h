@@ -13,10 +13,9 @@
 #include <string>
 #include <utility>	// std::pair
 
-
-//#define SIMULATION
-//#define DEBUG
-#define TEST
+//#define __MANSON_SIMULATION
+//#define __MANSON_DEBUG
+//#define __MANSON_TEST
 
 class HCS {
 private:
