@@ -32,7 +32,12 @@ To use the simulation mode, create a socat stream:
 $ socat PTY,link=/tmp/virtual-tty,raw,echo=0 -
 ```
 
+## Library
+A static library will be created in lib/ dir. It can be used to link your own implementation.
+
+
 ## Examples
+The example will be created in build/ directory. It can be run by ./build/manson-example
 
 ### setting voltage and current
 
