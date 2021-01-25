@@ -80,6 +80,3 @@ int main(int argc, char **argv) {
 
 	j.disconnect();
 }
-
-
-

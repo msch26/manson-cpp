@@ -7,7 +7,6 @@
  */
 
 #include "HCS.h"
-#include "wiringSerial.h"
 
 #include <sys/ioctl.h>
 #include <iostream>
@@ -63,13 +62,17 @@ public:
 };
 
 void HCS::init() {
-	if(!connected){
-		throw std::runtime_error("failed to read max values. HSC is not connected via uart");
+	try{
+		if(!connected){
+			throw std::runtime_error("failed to read max values. HSC is not connected via uart");
+		}
+		maxValues = this->getMaxValues();
+		getPresentUpperLimitVoltage();
+		getPresentUpperLimitCurrent();
+		initialized = true;
+	}catch (std::runtime_error& e) {
+		std::cerr << e.what() << '\n';
 	}
-	maxValues = this->getMaxValues();
-	getPresentUpperLimitVoltage();
-	getPresentUpperLimitCurrent();
-	initialized = true;
 }
 
 void HCS::setDisconnected()
@@ -79,12 +82,18 @@ void HCS::setDisconnected()
 
 bool HCS::isConnected(void) {
 #ifndef SIMULATION
-	if(!connected)
-	{
-		throw std::runtime_error("not connected to HSC");
-	}
-	if (fd < 0) {
-		throw std::runtime_error("serial stream is not open\n");
+	try{
+		if(!connected)
+		{
+			if(fd < 0){
+				throw std::runtime_error("device connected state is not synced to file diskriptor");
+			}
+		}
+		if (fd < 0) {
+			throw std::runtime_error("file descriptor is not set");
+		}
+	}catch (std::runtime_error& e) {
+		std::cerr << e.what() << '\n';
 	}
 #endif
 	return true;
@@ -144,12 +153,11 @@ std::string HCS::receiveViaUart(uint8_t byteCount) {
 
 	uint8_t byteCounter = 0x0;
 	char c;
-	char debug[byteCount];
 	int i=0;
 	std::string received = "";
 
 #ifdef DEBUG
-		std::cout << "exprected response length (" << std::to_string(byteCount) << ")\n";
+	std::cout << "exprected response length (" << std::to_string(byteCount) << ")\n";
 #endif
 
 
@@ -175,7 +183,6 @@ std::string HCS::receiveViaUart(uint8_t byteCount) {
 //			continue;
 //		}
 //		y = 4;
-		debug[i] = c;
 		++i;
 		++byteCounter;
 
@@ -186,12 +193,6 @@ std::string HCS::receiveViaUart(uint8_t byteCount) {
 #endif
 		received += c;
 	}
-
-//	if(y < 3){
-//		std::cerr << "try to wait for data again\n";
-//	}
-
-//	}	// for()
 
 #ifdef DEBUG
 		std::cout << "response count is " << std::to_string(byteCount) << " byte\n";
